@@ -20,9 +20,9 @@ there is a Flask extension that handles that for you.  This is recommended
 if you want to get started quickly.
 
 You can download `Flask-SQLAlchemy`_ from `PyPI
-<http://pypi.python.org/pypi/Flask-SQLAlchemy>`_.
+<https://pypi.python.org/pypi/Flask-SQLAlchemy>`_.
 
-.. _Flask-SQLAlchemy: http://packages.python.org/Flask-SQLAlchemy/
+.. _Flask-SQLAlchemy: http://pythonhosted.org/Flask-SQLAlchemy/
 
 
 Declarative
@@ -61,11 +61,12 @@ already with the :class:`~sqlalchemy.orm.scoped_session`.
 
 To use SQLAlchemy in a declarative way with your application, you just
 have to put the following code into your application module.  Flask will
-automatically remove database sessions at the end of the request for you::
+automatically remove database sessions at the end of the request or
+when the application shuts down::
 
     from yourapplication.database import db_session
 
-    @app.teardown_request
+    @app.teardown_appcontext
     def shutdown_session(exception=None):
         db_session.remove()
 
@@ -109,7 +110,7 @@ Querying is simple as well:
 
 .. _SQLAlchemy: http://www.sqlalchemy.org/
 .. _declarative:
-   http://www.sqlalchemy.org/docs/orm/extensions/declarative.html
+   http://docs.sqlalchemy.org/en/latest/orm/extensions/declarative.html
 
 Manual Object Relational Mapping
 --------------------------------
@@ -135,11 +136,12 @@ Here is an example `database.py` module for your application::
         metadata.create_all(bind=engine)
 
 As for the declarative approach you need to close the session after
-each request.  Put this into your application module::
+each request or application context shutdown.  Put this into your
+application module::
 
     from yourapplication.database import db_session
 
-    @app.teardown_request
+    @app.teardown_appcontext
     def shutdown_session(exception=None):
         db_session.remove()
 
@@ -175,13 +177,15 @@ SQL Abstraction Layer
 If you just want to use the database system (and SQL) abstraction layer
 you basically only need the engine::
 
-    from sqlalchemy import create_engine, MetaData
+    from sqlalchemy import create_engine, MetaData, Table
 
     engine = create_engine('sqlite:////tmp/test.db', convert_unicode=True)
     metadata = MetaData(bind=engine)
 
 Then you can either declare the tables in your code like in the examples
 above, or automatically load them::
+
+    from sqlalchemy import Table
 
     users = Table('users', metadata, autoload=True)
 
@@ -211,4 +215,4 @@ You can also pass strings of SQL statements to the
 (1, u'admin', u'admin@localhost')
 
 For more information about SQLAlchemy, head over to the
-`website <http://sqlalchemy.org/>`_.
+`website <http://www.sqlalchemy.org/>`_.

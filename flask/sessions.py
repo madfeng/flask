@@ -5,15 +5,18 @@
 
     Implements cookie based sessions based on itsdangerous.
 
-    :copyright: (c) 2012 by Armin Ronacher.
+    :copyright: (c) 2014 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
 
+import uuid
 import hashlib
+from base64 import b64encode, b64decode
 from datetime import datetime
 from werkzeug.http import http_date, parse_date
 from werkzeug.datastructures import CallbackDict
 from . import Markup, json
+from ._compat import iteritems, text_type
 
 from itsdangerous import URLSafeTimedSerializer, BadSignature
 
@@ -49,41 +52,52 @@ class SessionMixin(object):
     modified = True
 
 
+def _tag(value):
+    if isinstance(value, tuple):
+        return {' t': [_tag(x) for x in value]}
+    elif isinstance(value, uuid.UUID):
+        return {' u': value.hex}
+    elif isinstance(value, bytes):
+        return {' b': b64encode(value).decode('ascii')}
+    elif callable(getattr(value, '__html__', None)):
+        return {' m': text_type(value.__html__())}
+    elif isinstance(value, list):
+        return [_tag(x) for x in value]
+    elif isinstance(value, datetime):
+        return {' d': http_date(value)}
+    elif isinstance(value, dict):
+        return dict((k, _tag(v)) for k, v in iteritems(value))
+    elif isinstance(value, str):
+        try:
+            return text_type(value)
+        except UnicodeError:
+            from flask.debughelpers import UnexpectedUnicodeError
+            raise UnexpectedUnicodeError(u'A byte string with '
+                u'non-ASCII data was passed to the session system '
+                u'which can only store unicode strings.  Consider '
+                u'base64 encoding your string (String was %r)' % value)
+    return value
+
+
 class TaggedJSONSerializer(object):
     """A customized JSON serializer that supports a few extra types that
     we take for granted when serializing (tuples, markup objects, datetime).
     """
 
     def dumps(self, value):
-        def _tag(value):
-            if isinstance(value, tuple):
-                return {' t': [_tag(x) for x in value]}
-            elif callable(getattr(value, '__html__', None)):
-                return {' m': unicode(value.__html__())}
-            elif isinstance(value, list):
-                return [_tag(x) for x in value]
-            elif isinstance(value, datetime):
-                return {' d': http_date(value)}
-            elif isinstance(value, dict):
-                return dict((k, _tag(v)) for k, v in value.iteritems())
-            elif isinstance(value, str):
-                try:
-                    return unicode(value)
-                except UnicodeError:
-                    raise UnexpectedUnicodeError(u'A byte string with '
-                        u'non-ASCII data was passed to the session system '
-                        u'which can only store unicode strings.  Consider '
-                        u'base64 encoding your string (String was %r)' % value)
-            return value
         return json.dumps(_tag(value), separators=(',', ':'))
 
     def loads(self, value):
         def object_hook(obj):
             if len(obj) != 1:
                 return obj
-            the_key, the_value = obj.iteritems().next()
+            the_key, the_value = next(iteritems(obj))
             if the_key == ' t':
                 return tuple(the_value)
+            elif the_key == ' u':
+                return uuid.UUID(the_value)
+            elif the_key == ' b':
+                return b64decode(the_value)
             elif the_key == ' m':
                 return Markup(the_value)
             elif the_key == ' d':
@@ -212,7 +226,7 @@ class SessionInterface(object):
 
     def get_cookie_path(self, app):
         """Returns the path for which the cookie should be valid.  The
-        default implementation uses the value from the SESSION_COOKIE_PATH``
+        default implementation uses the value from the ``SESSION_COOKIE_PATH``
         config var if it's set, and falls back to ``APPLICATION_ROOT`` or
         uses ``/`` if it's `None`.
         """
@@ -240,6 +254,24 @@ class SessionInterface(object):
         """
         if session.permanent:
             return datetime.utcnow() + app.permanent_session_lifetime
+
+    def should_set_cookie(self, app, session):
+        """Indicates whether a cookie should be set now or not.  This is
+        used by session backends to figure out if they should emit a
+        set-cookie header or not.  The default behavior is controlled by
+        the ``SESSION_REFRESH_EACH_REQUEST`` config variable.  If
+        it's set to `False` then a cookie is only set if the session is
+        modified, if set to `True` it's always set if the session is
+        permanent.
+
+        This check is usually skipped if sessions get deleted.
+
+        .. versionadded:: 1.0
+        """
+        if session.modified:
+            return True
+        save_each = app.config['SESSION_REFRESH_EACH_REQUEST']
+        return save_each and session.permanent
 
     def open_session(self, app, request):
         """This method has to be implemented and must either return `None`
@@ -304,11 +336,26 @@ class SecureCookieSessionInterface(SessionInterface):
     def save_session(self, app, session, response):
         domain = self.get_cookie_domain(app)
         path = self.get_cookie_path(app)
+
+        # Delete case.  If there is no session we bail early.
+        # If the session was modified to be empty we remove the
+        # whole cookie.
         if not session:
             if session.modified:
                 response.delete_cookie(app.session_cookie_name,
                                        domain=domain, path=path)
             return
+
+        # Modification case.  There are upsides and downsides to
+        # emitting a set-cookie header each request.  The behavior
+        # is controlled by the :meth:`should_set_cookie` method
+        # which performs a quick check to figure out if the cookie
+        # should be set or not.  This is controlled by the
+        # SESSION_REFRESH_EACH_REQUEST config flag as well as
+        # the permanent flag on the session itself.
+        if not self.should_set_cookie(app, session):
+            return
+
         httponly = self.get_cookie_httponly(app)
         secure = self.get_cookie_secure(app)
         expires = self.get_expiration_time(app, session)
@@ -316,6 +363,3 @@ class SecureCookieSessionInterface(SessionInterface):
         response.set_cookie(app.session_cookie_name, val,
                             expires=expires, httponly=httponly,
                             domain=domain, path=path, secure=secure)
-
-
-from flask.debughelpers import UnexpectedUnicodeError

@@ -86,6 +86,7 @@ Incoming Request Data
       The current request method (``POST``, ``GET`` etc.)
 
    .. attribute:: path
+   .. attribute:: full_path
    .. attribute:: script_root
    .. attribute:: url
    .. attribute:: base_url
@@ -105,6 +106,7 @@ Incoming Request Data
 
       ============= ======================================================
       `path`        ``/page.html``
+      `full_path`   ``/page.html?x=y``
       `script_root` ``/myapplication``
       `base_url`    ``http://www.example.com/myapplication/page.html``
       `url`         ``http://www.example.com/myapplication/page.html?x=y``
@@ -142,7 +144,7 @@ Response Objects
 
    .. attribute:: headers
 
-      A :class:`Headers` object representing the response headers.
+      A :class:`~werkzeug.datastructures.Headers` object representing the response headers.
 
    .. attribute:: status
 
@@ -224,6 +226,18 @@ implementation that Flask is using.
 .. autoclass:: SessionMixin
    :members:
 
+.. autodata:: session_json_serializer
+
+   This object provides dumping and loading methods similar to simplejson
+   but it also tags certain builtin Python objects that commonly appear in
+   sessions.  Currently the following extended values are supported in
+   the JSON it dumps:
+
+   -    :class:`~markupsafe.Markup` objects
+   -    :class:`~uuid.UUID` objects
+   -    :class:`~datetime.datetime` objects
+   -   :class:`tuple`\s
+
 .. admonition:: Notice
 
    The ``PERMANENT_SESSION_LIFETIME`` config key can also be an integer
@@ -260,7 +274,19 @@ thing, like it does for :class:`request` and :class:`session`.
 
    Starting with Flask 0.10 this is stored on the application context and
    no longer on the request context which means it becomes available if
-   only the application context is bound and not yet a request.
+   only the application context is bound and not yet a request.  This
+   is especially useful when combined with the :ref:`faking-resources`
+   pattern for testing.
+
+   Additionally as of 0.10 you can use the :meth:`get` method to
+   get an attribute or `None` (or the second argument) if it's not set.
+   These two usages are now equivalent::
+
+        user = getattr(flask.g, 'user', None)
+        user = flask.g.get('user', None)
+
+   It's now also possible to use the ``in`` operator on it to see if an
+   attribute is defined and it yields all keys on iteration.
 
    This is a proxy.  See :ref:`notes-on-proxies` for more information.
 
@@ -279,6 +305,8 @@ Useful Functions and Classes
    This is a proxy.  See :ref:`notes-on-proxies` for more information.
 
 .. autofunction:: has_request_context
+
+.. autofunction:: copy_current_request_context
 
 .. autofunction:: has_app_context
 
@@ -324,7 +352,7 @@ JSON Support
 Flask uses ``simplejson`` for the JSON implementation.  Since simplejson
 is provided both by the standard library as well as extension Flask will
 try simplejson first and then fall back to the stdlib json module.  On top
-of that it will delegate access to the current application's JSOn encoders
+of that it will delegate access to the current application's JSON encoders
 and decoders for easier customization.
 
 So for starters instead of doing::
@@ -339,18 +367,19 @@ You can instead just do this::
     from flask import json
 
 For usage examples, read the :mod:`json` documentation in the standard
-lirbary.  The following extensions are by default applied to the stdlib's
+library.  The following extensions are by default applied to the stdlib's
 JSON module:
 
 1.  ``datetime`` objects are serialized as :rfc:`822` strings.
 2.  Any object with an ``__html__`` method (like :class:`~flask.Markup`)
-    will ahve that method called and then the return value is serialized
+    will have that method called and then the return value is serialized
     as string.
 
 The :func:`~htmlsafe_dumps` function of this json module is also available
 as filter called ``|tojson`` in Jinja2.  Note that inside `script`
 tags no escaping must take place, so make sure to disable escaping
-with ``|safe`` if you intend to use it inside `script` tags:
+with ``|safe`` if you intend to use it inside `script` tags unless
+you are using Flask 0.10 which implies that:
 
 .. sourcecode:: html+jinja
 
@@ -358,7 +387,14 @@ with ``|safe`` if you intend to use it inside `script` tags:
         doSomethingWith({{ user.username|tojson|safe }});
     </script>
 
-Note that the ``|tojson`` filter escapes forward slashes properly.
+.. admonition:: Auto-Sort JSON Keys
+
+    The configuration variable ``JSON_SORT_KEYS`` (:ref:`config`) can be
+    set to false to stop Flask from auto-sorting keys.  By default sorting
+    is enabled and outside of the app context sorting is turned on.
+
+    Notice that disabling key sorting can cause issues when using content
+    based HTTP caches and Python's hash randomization feature.
 
 .. autofunction:: jsonify
 
@@ -480,7 +516,7 @@ Signals
 
 .. data:: signals_available
 
-   `True` if the signalling system is available.  This is the case
+   `True` if the signaling system is available.  This is the case
    when `blinker`_ is installed.
 
 .. data:: template_rendered
@@ -522,7 +558,30 @@ Signals
    This signal is sent when the application is tearing down the
    application context.  This is always called, even if an error happened.
    An `exc` keyword argument is passed with the exception that caused the
-   teardown.
+   teardown.  The sender is the application.
+
+.. data:: appcontext_pushed
+
+   This signal is sent when an application context is pushed.  The sender
+   is the application.
+
+   .. versionadded:: 0.10
+
+.. data:: appcontext_popped
+
+   This signal is sent when an application context is popped.  The sender
+   is the application.  This usually falls in line with the
+   :data:`appcontext_tearing_down` signal.
+
+   .. versionadded:: 0.10
+
+.. data:: message_flashed
+
+   This signal is sent when the application is flashing a message.  The
+   messages is sent as `message` keyword argument and the category as
+   `category`.
+
+   .. versionadded:: 0.10
 
 .. currentmodule:: None
 
@@ -540,7 +599,7 @@ Signals
       do nothing but will fail with a :exc:`RuntimeError` for all other
       operations, including connecting.
 
-.. _blinker: http://pypi.python.org/pypi/blinker
+.. _blinker: https://pypi.python.org/pypi/blinker
 
 Class-Based Views
 -----------------
@@ -680,7 +739,7 @@ some defaults to :meth:`~flask.Flask.add_url_rule` or general behavior:
 
 -   `required_methods`: if this attribute is set, Flask will always add
     these methods when registering a URL rule even if the methods were
-    explicitly overriden in the ``route()`` call.
+    explicitly overridden in the ``route()`` call.
 
 Full example::
 
@@ -696,3 +755,35 @@ Full example::
 
 .. versionadded:: 0.8
    The `provide_automatic_options` functionality was added.
+
+Command Line Interface
+----------------------
+
+.. currentmodule:: flask.cli
+
+.. autoclass:: FlaskGroup
+   :members:
+
+.. autoclass:: AppGroup
+   :members:
+
+.. autoclass:: ScriptInfo
+   :members:
+
+.. autofunction:: with_appcontext
+
+.. autofunction:: pass_script_info
+
+   Marks a function so that an instance of :class:`ScriptInfo` is passed
+   as first argument to the click callback.
+
+.. autofunction:: script_info_option
+
+   A special decorator that informs a click callback to be passed the
+   script info object as first argument.  This is normally not useful
+   unless you implement very special commands like the run command which
+   does not want the application to be loaded yet. 
+
+.. autodata:: run_command
+
+.. autodata:: shell_command

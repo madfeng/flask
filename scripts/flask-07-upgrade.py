@@ -16,7 +16,7 @@
     the most common patterns at least.  The diff it generates should be
     hand reviewed and not applied blindly without making backups.
 
-    :copyright: (c) Copyright 2011 by Armin Ronacher.
+    :copyright: (c) Copyright 2014 by Armin Ronacher.
     :license: see LICENSE for more details.
 """
 import re
@@ -287,9 +287,7 @@ def main():
         args = ['.']
 
     if ast is None:
-        parser.error('Python 2.6 or later is required to run the upgrade script.\n'
-                     'The runtime requirements for Flask 0.7 however are still '
-                     'Python 2.5.')
+        parser.error('Python 2.6 or later is required to run the upgrade script.')
 
     for path in args:
         scan_path(path, teardown=not options.no_teardown)

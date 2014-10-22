@@ -148,7 +148,7 @@ signal subscribers::
             model_saved.send(self)
 
 Try to always pick a good sender.  If you have a class that is emitting a
-signal, pass `self` as sender.  If you emitting a signal from a random
+signal, pass `self` as sender.  If you are emitting a signal from a random
 function, you can pass ``current_app._get_current_object()`` as sender.
 
 .. admonition:: Passing Proxies as Senders
@@ -291,4 +291,62 @@ The following signals exist in Flask:
    This will also be passed an `exc` keyword argument that has a reference
    to the exception that caused the teardown if there was one.
 
-.. _blinker: http://pypi.python.org/pypi/blinker
+.. data:: flask.appcontext_pushed
+   :noindex:
+
+   This signal is sent when an application context is pushed.  The sender
+   is the application.  This is usually useful for unittests in order to
+   temporarily hook in information.  For instance it can be used to
+   set a resource early onto the `g` object.
+
+   Example usage::
+
+        from contextlib import contextmanager
+        from flask import appcontext_pushed
+
+        @contextmanager
+        def user_set(app, user):
+            def handler(sender, **kwargs):
+                g.user = user
+            with appcontext_pushed.connected_to(handler, app):
+                yield
+
+   And in the testcode::
+
+        def test_user_me(self):
+            with user_set(app, 'john'):
+                c = app.test_client()
+                resp = c.get('/users/me')
+                assert resp.data == 'username=john'
+
+   .. versionadded:: 0.10
+
+.. data:: flask.appcontext_popped
+   :noindex:
+
+   This signal is sent when an application context is popped.  The sender
+   is the application.  This usually falls in line with the
+   :data:`appcontext_tearing_down` signal.
+
+   .. versionadded:: 0.10
+
+
+.. data:: flask.message_flashed
+   :noindex:
+
+   This signal is sent when the application is flashing a message.  The
+   messages is sent as `message` keyword argument and the category as
+   `category`.
+
+   Example subscriber::
+
+        recorded = []
+        def record(sender, message, category, **extra):
+            recorded.append((message, category))
+
+        from flask import message_flashed
+        message_flashed.connect(record, app)
+
+   .. versionadded:: 0.10
+
+.. _blinker: https://pypi.python.org/pypi/blinker

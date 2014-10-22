@@ -6,16 +6,18 @@
     Implements test support helpers.  This module is lazily imported
     and usually not used in production environments.
 
-    :copyright: (c) 2011 by Armin Ronacher.
+    :copyright: (c) 2014 by Armin Ronacher.
     :license: BSD, see LICENSE for more details.
 """
-
-from __future__ import with_statement
 
 from contextlib import contextmanager
 from werkzeug.test import Client, EnvironBuilder
 from flask import _request_ctx_stack
-from urlparse import urlparse
+
+try:
+    from werkzeug.urls import url_parse
+except ImportError:
+    from urlparse import urlsplit as url_parse
 
 
 def make_test_environ_builder(app, path='/', base_url=None, *args, **kwargs):
@@ -23,12 +25,14 @@ def make_test_environ_builder(app, path='/', base_url=None, *args, **kwargs):
     http_host = app.config.get('SERVER_NAME')
     app_root = app.config.get('APPLICATION_ROOT')
     if base_url is None:
-        url = urlparse(path)
+        url = url_parse(path)
         base_url = 'http://%s/' % (url.netloc or http_host or 'localhost')
         if app_root:
             base_url += app_root.lstrip('/')
         if url.netloc:
             path = url.path
+            if url.query:
+                path += '?' + url.query
     return EnvironBuilder(path, base_url, *args, **kwargs)
 
 
@@ -49,6 +53,8 @@ class FlaskClient(Client):
         session transaction.  This can be used to modify the session that
         the test client uses.  Once the with block is left the session is
         stored back.
+
+        ::
 
             with client.session_transaction() as session:
                 session['value'] = 42

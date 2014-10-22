@@ -3,10 +3,99 @@ Flask Changelog
 
 Here you can see the full list of changes between each Flask release.
 
+Version 1.0
+-----------
+
+(release date to be announced, codename to be selected)
+
+- Added `**kwargs` to :meth:`flask.Test.test_client` to support passing
+  additional keyword arguments to the constructor of
+  :attr:`flask.Flask.test_client_class`.
+- Added ``SESSION_REFRESH_EACH_REQUEST`` config key that controls the
+  set-cookie behavior.  If set to `True` a permanent session will be
+  refreshed each request and get their lifetime extended, if set to
+  `False` it will only be modified if the session actually modifies.
+  Non permanent sessions are not affected by this and will always
+  expire if the browser window closes.
+- Made Flask support custom JSON mimetypes for incoming data.
+- Added support for returning tuples in the form ``(response, headers)``
+  from a view function.
+- Added :meth:`flask.Config.from_json`.
+- Added :attr:`flask.Flask.config_class`.
+- Added :meth:`flask.config.Config.get_namespace`.
+- Added ``TEMPLATES_AUTO_RELOAD`` config key. If disabled the
+  templates will be reloaded only if the application is running in
+  debug mode. For higher performance it’s possible to disable that.
+- Added a workaround for a limitation in Python 3.3's namespace loader.
+- Added support for explicit root paths when using Python 3.3's namespace
+  packages.
+- Added ``flask`` and the ``flask.cli`` module to start the local
+  debug server through the click CLI system.  This is recommended over the old
+  ``flask.run()`` method as it works faster and more reliable due to a
+  different design and also replaces ``Flask-Script``.
+- Error handlers that match specific classes are now checked first,
+  thereby allowing catching exceptions that are subclasses of HTTP
+  exceptions (in ``werkzeug.exceptions``).  This makes it possible
+  for an extension author to create exceptions that will by default
+  result in the HTTP error of their choosing, but may be caught with
+  a custom error handler if desired.
+- Added :meth:`flask.Config.from_mapping`.
+- Flask will now log by default even if debug is disabled.  The log format is
+  now hardcoded but the default log handling can be disabled through the
+  ``LOGGER_HANDLER_POLICY`` configuration key.
+- Removed deprecate module functionality.
+- Added the ``EXPLAIN_TEMPLATE_LOADING`` config flag which when enabled will
+  instruct Flask to explain how it locates templates.  This should help
+  users debug when the wrong templates are loaded.
+- Enforce blueprint handling in the order they were registered for template
+  loading.
+- Ported testsuite to py.test.
+- Deprecated ``request.json`` in favour of ``request.get_json()``.
+- Add "pretty" and "compressed" separators definitions in jsonify() method.
+  Reduces JSON response size when JSONIFY_PRETTYPRINT_REGULAR=False by removing
+  unnecessary white space included by default after separators.
+
+
+Version 0.10.2
+--------------
+
+(bugfix release, release date to be announced)
+
+- Fixed broken `test_appcontext_signals()` test case.
+- Raise an :exc:`AttributeError` in :func:`flask.helpers.find_package` with a
+  useful message explaining why it is raised when a PEP 302 import hook is used
+  without an `is_package()` method.
+- Fixed an issue causing exceptions raised before entering a request or app
+  context to be passed to teardown handlers.
+- Fixed an issue with query parameters getting removed from requests in
+  the test client when absolute URLs were requested.
+- Made `@before_first_request` into a decorator as intended.
+- Fixed an etags bug when sending a file streams with a name.
+- Fixed `send_from_directory` not expanding to the application root path
+  correctly.
+- Changed logic of before first request handlers to flip the flag after
+  invoking.  This will allow some uses that are potentially dangerous but
+  should probably be permitted.
+
+Version 0.10.1
+--------------
+
+(bugfix release, released on June 14th 2013)
+
+- Fixed an issue where ``|tojson`` was not quoting single quotes which
+  made the filter not work properly in HTML attributes.  Now it's
+  possible to use that filter in single quoted attributes.  This should
+  make using that filter with angular.js easier.
+- Added support for byte strings back to the session system.  This broke
+  compatibility with the common case of people putting binary data for
+  token verification into the session.
+- Fixed an issue where registering the same method twice for the same endpoint
+  would trigger an exception incorrectly.
+
 Version 0.10
 ------------
 
-Release date to be decided.
+Released on June 13nd 2013, codename Limoncello.
 
 - Changed default cookie serialization format from pickle to JSON to
   limit the impact an attacker can do if the secret key leaks.  See
@@ -17,6 +106,8 @@ Release date to be decided.
   ``template_filter`` method family.
 - Set the content-length header for x-sendfile.
 - ``tojson`` filter now does not escape script blocks in HTML5 parsers.
+- ``tojson`` used in templates is now safe by default due.  This was
+  allowed due to the different escaping behavior.
 - Flask will now raise an error if you attempt to register a new function
   on an already used endpoint.
 - Added wrapper module around simplejson and added default serialization
@@ -38,6 +129,10 @@ Release date to be decided.
   ``flask.json.dumps`` to return bytestrings by default.
 - ``flask.g`` is now stored on the app context instead of the request
   context.
+- ``flask.g`` now gained a ``get()`` method for not erroring out on non
+  existing items.
+- ``flask.g`` now can be used with the ``in`` operator to see what's defined
+  and it now is iterable and will yield all attributes stored.
 - ``flask.Flask.request_globals_class`` got renamed to
   ``flask.Flask.app_ctx_globals_class`` which is a better name to what it
   does since 0.10.
@@ -51,6 +146,28 @@ Release date to be decided.
   as intended with domain names.
 - Changed logic for picking defaults for cookie values from sessions
   to work better with Google Chrome.
+- Added `message_flashed` signal that simplifies flashing testing.
+- Added support for copying of request contexts for better working with
+  greenlets.
+- Removed custom JSON HTTP exception subclasses.  If you were relying on them
+  you can reintroduce them again yourself trivially.  Using them however is
+  strongly discouraged as the interface was flawed.
+- Python requirements changed: requiring Python 2.6 or 2.7 now to prepare
+  for Python 3.3 port.
+- Changed how the teardown system is informed about exceptions.  This is now
+  more reliable in case something handles an exception halfway through
+  the error handling process.
+- Request context preservation in debug mode now keeps the exception
+  information around which means that teardown handlers are able to
+  distinguish error from success cases.
+- Added the ``JSONIFY_PRETTYPRINT_REGULAR`` configuration variable.
+- Flask now orders JSON keys by default to not trash HTTP caches due to
+  different hash seeds between different workers.
+- Added `appcontext_pushed` and `appcontext_popped` signals.
+- The builtin run method now takes the ``SERVER_NAME`` into account when
+  picking the default port to run on.
+- Added `flask.request.get_json()` as a replacement for the old
+  `flask.request.json` property.
 
 Version 0.9
 -----------
@@ -309,7 +426,7 @@ Released on July 27th 2010, codename Whisky
   prefix.  This makes it possible to bind a whole module to a
   configurable subdomain.
 
-.. _blinker: http://pypi.python.org/pypi/blinker
+.. _blinker: https://pypi.python.org/pypi/blinker
 
 Version 0.5.2
 -------------

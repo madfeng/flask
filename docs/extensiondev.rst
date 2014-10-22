@@ -390,7 +390,7 @@ extension to be approved you have to follow these guidelines:
     (``PackageName==dev``).
 9.  The ``zip_safe`` flag in the setup script must be set to ``False``,
     even if the extension would be safe for zipping.
-10. An extension currently has to support Python 2.5, 2.6 as well as
+10. An extension currently has to support Python 2.6 as well as
     Python 2.7
 
 
@@ -415,6 +415,6 @@ instead of ``flask_foo`` or ``flaskext_foo`` so that extensions can
 transition to the new package name without affecting users.
 
 
-.. _OAuth extension: http://packages.python.org/Flask-OAuth/
+.. _OAuth extension: http://pythonhosted.org/Flask-OAuth/
 .. _mailinglist: http://flask.pocoo.org/mailinglist/
 .. _IRC channel: http://flask.pocoo.org/community/irc/
